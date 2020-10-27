@@ -1,0 +1,120 @@
+#The problem:
+
+#PCR amplification is necessary in RNA seq experiments to ensure a high enough 
+#concentration of cDNA is present for sequencing. However, when PCR duplicates are
+#sequenced, it can add inaccuracy/bias to your expression counts. Thus, this 
+#algorithm will serve to find and remove PCR duplicates.
+#Must deal with soft clipping
+
+#PYTHON SCRIPT BEGINS HERE
+Docstring:
+    '''This program removes PCR duplicates from a sorted SAM file.'''
+
+Import modules: argparse, numpy, re (regular expressions)
+
+Argparse for the user to choose the following values:
+    Input file path
+    Output file path
+    UMI file
+
+Open Inputs (using argvars):
+    Sam file from RNA-seq experiments
+    STL96.txt contains UMIs (Unique molecular identifier)
+
+Open Outputs (using argvars):
+    Deduplicated SAM file
+    Duplication stats file (number of duplicates, percent duplicates, maybe a histogram 
+    data table showing duplicate number x occurences)
+
+Define function "initialize_UMI_dictionary"
+    ```Generate a dictionary with the UMI's as the keys and empty lists as the values```
+    The values will be intialized as empty list
+    return the dictionary
+
+Print the UMI_dict to test function
+
+Define UMI_readinator
+    ```Creates a list of all the UMI's from an input file with 1 UMI per line```
+    For each line in the UMI file
+        Add that UMI as a string to a list of UMI's
+
+Define function "Error_Correct_UMIs"
+    ```Corrects UMI's with 1 error to be the correct UMI```
+    For a given UMI
+    If the UMI is in the UMI list:
+        set UMI = read UMI
+    else
+        For each UMI in the list of UMI's
+            For each character in the 8 character string
+                If the character is equal to the character UMI in the list 
+                    add 1 point to a point counter
+            If you get 7 points
+                change the input UMI to that UMI from the list
+                Continue
+            If the UMI is the last one in the list, set UMI = "LOW_QAUL"
+    Return UMI
+
+Test UMI_readinator on a set of UMI's that 
+    1 that exactly matches an UMI from the list
+    1 that has 1 error
+    1 that has 2 errors
+
+
+Define function "dedupinate"
+    ```Removes PCR duplicates from a SAM file```
+    For every line in the SAM file
+        Use regex to skip the @SQ header lines
+        Count 1 read
+        Set chromosome variable to 1
+        set variable to read the line in
+        use regex to store variables for the:
+            UMI (at the end of column 1)
+            bit flag (column 2) #Gives strandedness ##If bit 16 set, the sequence aligned to rc of reference
+            This_read_chromosome (column 3)
+            1-based leftmost position (column 4)
+            Cigar string (column 6)
+        If This_read_chromosome is not equal to chromsome,
+            Set chromosome equal to this read chromosome
+            Use initialize_UMI_dictionary to clear the old dictionary from memory, and start a new one
+        
+        Error correct the UMI
+        If the UMI is "LOW_QAUL"
+            move on to the next read
+
+        Using flag, check if sequence is mapped
+        if it's unmapped
+            move on to the next read
+        if read is reverse complemented to reference
+            set "reverse" variable to True
+        
+
+        If it's not reverse complemented
+            Subtract the # of 5' soft clipped nucleotides (left side of CIGAR) from the POS
+            Check if that number (clip-adjusted POS) is in the list associated with that read's UMI (in the UMI dict)
+            If it is
+                Move on to the next read 
+                Count 1 PCR duplicate
+            If it isn't 
+                add it to that list
+                Write the entire line to the output SAM file
+
+            
+        If it is reverse complemented
+            Use regex and CIGAR string to calculate the 5' end of the read
+            (add up M,D,N,S numbers)
+            Add "R" to the end of that position 
+            If that position + "R" is not in the UMI dict
+                Add it to the umi dict list for its appropriate UMI
+                write the entire line to the output file
+            If that position + R string is in the UMI dict
+                move on to the next read
+                count 1 PCR duplicate
+
+    Write # of reads, # of PCR duplicates, and % of duplicates to duplicate_stats.txt
+
+run dedupinator function
+
+
+This core function will be unit tested on test SAM files
+
+
